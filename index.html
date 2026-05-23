@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>DEFLECTOR MERGED</title>
+
+<style>
+body{
+margin:0;
+overflow:hidden;
+background:#070712;
+font-family:Arial, sans-serif;
+color:white;
+user-select: none;
+}
+
+#ui{
+position:absolute;
+top:10px;
+left:10px;
+background:#111122cc;
+padding:15px;
+border:2px solid #00ffcc;
+border-radius: 8px;
+z-index:10;
+display: flex;
+flex-direction: column;
+gap: 8px;
+}
+
+.stats {
+font-size: 16px;
+font-weight: bold;
+letter-spacing: 1px;
+margin-bottom: 5px;
+}
+
+canvas{
+display:block;
+background:#0d0d1e;
+}
+
+button{
+padding:8px 14px;
+background:#00ffcc;
+border:none;
+font-weight:bold;
+color: #070712;
+cursor:pointer;
+border-radius: 4px;
+transition: background 0.2s;
+}
+
+button:hover {
+background: #00cca3;
+}
+
+#gameOver{
+position:absolute;
+inset:0;
+display:none;
+justify-content:center;
+align-items:center;
+flex-direction:column;
+background:rgba(0, 12, 24, 0.85);
+font-size:40px;
+font-weight: bold;
+z-index:20;
+gap: 20px;
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+<div class="stats">SCORE: <span id="score">0</span></div>
+<div class="stats">LIVES: <span id="lives">5</span></div>
+<div class="stats">LEVEL: <span id="level">1</span></div>
+<div class="stats">COINS: <span id="coins">0</span></div>
+
+<button onclick="upgradeWeapon()">UPGRADE WEAPON (Cost: 10)</button>
+<button onclick="upgradeAura()">UPGRADE AURA (Cost: 15)</button>
+<button onclick="spawnBoss()">SPAWN BOSS</button>
+</div>
+
+<div id="gameOver">
+<div>GAME OVER</div>
+<button onclick="location.reload()" style="font-size: 20px; padding: 10px 20px;">RESTART</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+window.addEventListener("resize", () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+
+let score = 0;
+let lives = 5;
+let level = 1;
+let coins = 0;
+
+let weaponLevel = 1;
+let auraLevel = 1;
+let isGameOver = false;
+
+const scoreEl = document.getElementById("score");
+const livesEl = document.getElementById("lives");
+const levelEl = document.getElementById("level");
+const coinsEl = document.getElementById("coins");
+
+const player = {
+x:canvas.width/2,
+y:canvas.height/2,
+size:20,
+speed:5,
+color:"#00ffcc"
+};
+
+let bullets = [];
+let enemies = [];
+let particles = [];
+
+const keys = {};
+
+addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+canvas.addEventListener("click",e=>{
+if(!isGameOver) shoot(e.clientX,e.clientY);
+});
+
+function shoot(mx,my){
+const angle = Math.atan2(my-player.y,mx-player.x);
+bullets.push({
+x:player.x,
+y:player.y,
+dx:Math.cos(angle)*8,
+dy:Math.sin(angle)*8,
+size:6
+});
+}
+
+function spawnEnemy(){
+if(isGameOver) return;
+
+const side = Math.floor(Math.random()*4);
+let x,y;
+
+if(side===0){ x=0; y=Math.random()*canvas.height; }
+if(side===1){ x=canvas.width; y=Math.random()*canvas.height; }
+if(side===2){ x=Math.random()*canvas.width; y=0; }
+if(side===3){ x=Math.random()*canvas.width; y=canvas.height; }
+
+enemies.push({
+x,
+y,
+size:20+Math.random()*20,
+speed:1+Math.random()*2+level*0.2,
+hp:2+level,
+boss:false
+});
+}
+
+function spawnBoss(){
+if(isGameOver) return;
+enemies.push({
+x: Math.random() * canvas.width,
+y: 0,
+size:60,
+speed:1.2,
+hp:40 + (level * 10),
+boss:true
+});
+}
+
+function upgradeWeapon(){
+if(coins>=10){
+coins-=10;
+weaponLevel++;
+coinsEl.textContent = coins;
+}
+}
+
+function upgradeAura(){
+if(coins>=15){
+coins-=15;
+auraLevel++;
+coinsEl.textContent = coins;
+}
+}
+
+function createExplosion(x, y, color) {
+for(let i=0;i<10;i++){
+particles.push({
+x: x,
+y: y,
+dx:(Math.random()-0.5)*6,
+dy:(Math.random()-0.5)*6,
+life:30,
+color: color
+});
+}
+}
+
+function update(){
+if(isGameOver) return;
+
+// Player Movement
+if(keys["w"] || keys["arrowup"]) player.y-=player.speed;
+if(keys["s"] || keys["arrowdown"]) player.y+=player.speed;
+if(keys["a"] || keys["arrowleft"]) player.x-=player.speed;
+if(keys["d"] || keys["arrowright"]) player.x+=player.speed;
+
+// Constrain player to screen bounds
+player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
+player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
+
+// Update Bullets
+for (let bi = bullets.length - 1; bi >= 0; bi--) {
+    let b = bullets[bi];
+    b.x += b.dx;
+    b.y += b.dy;
+    if(b.x<0||b.x>canvas.width||b.y<0||b.y>canvas.height){
+        bullets.splice(bi, 1);
+    }
+}
+
+// Aura properties
+const auraRadius = player.size + (20 * auraLevel);
+
+// Update Enemies & Interactions
+for (let ei = enemies.length - 1; ei >= 0; ei--) {
+    let e = enemies[ei];
+    const angle = Math.atan2(player.y-e.y,player.x-e.x);
+    e.x += Math.cos(angle)*e.speed;
+    e.y += Math.sin(angle)*e.speed;
+
+    const distToPlayer = Math.hypot(player.x-e.x,player.y-e.y);
+
+    // Aura Damage over time functionality
+    if (distToPlayer < auraRadius + e.size) {
+        e.hp -= (0.02 * auraLevel); // Subtle constant aura damage
+        if(Math.random() < 0.1) { // Particle flare for aura damage
+            particles.push({x: e.x, y: e.y, dx: (Math.random()-0.5)*2, dy: (Math.random()-0.5)*2, life: 10, color: "#00ffcc"});
+        }
+    }
+
+    // Player collision
+    if(distToPlayer < player.size+e.size){
+        lives--;
+        createExplosion(e.x, e.y, "orange");
+        enemies.splice(ei,1);
+        if(lives<=0){
+            lives = 0;
+            isGameOver = true;
+            document.getElementById("gameOver").style.display="flex";
+        }
+        continue;
+    }
+
+    // Bullet collision
+    for (let bi = bullets.length - 1; bi >= 0; bi--) {
+        let b = bullets[bi];
+        const distToBullet = Math.hypot(b.x-e.x,b.y-e.y);
+
+        if(distToBullet < e.size){
+            e.hp -= weaponLevel;
+            createExplosion(b.x, b.y, "#ffff00");
+            bullets.splice(bi, 1);
+            break; 
+        }
+    }
+
+    // Check Enemy Death (Aura or Bullet induced)
+    if(e.hp<=0){
+        score += e.boss ? 100 : 10;
+        coins += e.boss ? 50 : 5;
+        createExplosion(e.x, e.y, e.boss ? "red" : "orange");
+        enemies.splice(ei,1);
+
+        if(score >= level*100){
+            level++;
+        }
+    }
+}
+
+// Update Particles
+for (let pi = particles.length - 1; pi >= 0; pi--) {
+    let p = particles[pi];
+    p.x += p.dx;
+    p.y += p.dy;
+    p.life--;
+    if(p.life<=0){
+        particles.splice(pi,1);
+    }
+}
+
+// Sync UI UI Elements
+scoreEl.textContent = score;
+livesEl.textContent = lives;
+levelEl.textContent = level;
+coinsEl.textContent = coins;
+}
+
+function draw(){
+ctx.clearRect(0,0,canvas.width,canvas.height);
+
+// Draw Aura
+ctx.beginPath();
+ctx.fillStyle = "rgba(0,255,200,0.12)";
+ctx.arc(player.x,player.y,player.size+20*auraLevel,0,Math.PI*2);
+ctx.fill();
+ctx.strokeStyle = "rgba(0,255,200,0.3)";
+ctx.lineWidth = 2;
+ctx.stroke();
+
+// Draw Player
+ctx.beginPath();
+ctx.fillStyle = player.color;
+ctx.arc(player.x,player.y,player.size,0,Math.PI*2);
+ctx.fill();
+
+// Draw Bullets
+bullets.forEach(b=>{
+ctx.beginPath();
+ctx.fillStyle="#ffff00";
+ctx.arc(b.x,b.y,b.size,0,Math.PI*2);
+ctx.fill();
+});
+
+// Draw Enemies
+enemies.forEach(e=>{
+ctx.beginPath();
+ctx.fillStyle = e.boss ? "red" : "orange";
+ctx.arc(e.x,e.y,Math.max(5, e.size),0,Math.PI*2);
+ctx.fill();
+});
+
+// Draw Particles
+particles.forEach(p=>{
+ctx.fillStyle= p.color || "#00ffcc";
+ctx.fillRect(p.x,p.y,3,3);
+});
+}
+
+function loop(){
+update();
+draw();
+requestAnimationFrame(loop);
+}
+
+setInterval(spawnEnemy,1000);
+loop();
+</script>
+
+</body>
+</html>
